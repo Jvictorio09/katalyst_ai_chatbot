@@ -1,8 +1,8 @@
 from django.urls import path
-from django.views.generic import TemplateView
 from . import views
 
 urlpatterns = [
-    path("", views.home, name="home"),
-    
+    path("", views.katalyst_page, name="katalyst_page"),
+    path("api/chatbot/", views.chatbot_api, name="chatbot_api"),
+    path("api/chatbot/suggestions/", views.chat_suggestions_api, name="chat_suggestions_api"),
 ]

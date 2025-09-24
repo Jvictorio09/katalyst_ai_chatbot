@@ -129,3 +129,11 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+import os
+
+# Webhook config
+CHATBOT_WEBHOOK_URL  = "https://katalyst-crm.fly.dev/webhook/1390f5ad-851a-4b6f-ba50-2f084cfc436d"
+CHATBOT_WEBHOOK_AUTH = ""                 # e.g. "Bearer xxx" if they add auth later
+CHATBOT_TIMEOUT_SECONDS = 12

@@ -1,1 +1,203 @@
-hello world!
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>KATALYST — AI Boosted CRM</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Background orbs + deep navy gradient */
+    body{
+      background:
+        radial-gradient(1200px 420px at 10% -10%, rgba(56,189,248,.28), transparent 60%),
+        radial-gradient(900px 380px at 92% -6%, rgba(168,85,247,.22), transparent 60%),
+        linear-gradient(180deg,#0a0f25 0%,#0a0f25 60%,#0b1027 100%);
+    }
+    /* Card and glow */
+    .k-card{ box-shadow:
+      0 12px 28px rgba(0,0,0,.55),
+      inset 0 0 0 1px rgba(255,255,255,.06);
+    }
+    /* Uniform "LEARN MORE" button (no Tailwind @apply so it works on CDN) */
+    .k-btn{
+      font-size: 11px; font-weight: 800; letter-spacing: .04em;
+      padding: .5rem 1.25rem; border-radius: .5rem; color:#0b0f1a;
+      background: linear-gradient(90deg,#34d399 0%,#a3e635 100%);
+      box-shadow:
+        inset 0 0 0 1px rgba(255,255,255,.06),
+        0 8px 22px rgba(16,185,129,.35);
+    }
+    /* Chat visuals */
+    .k-pill{
+      background: linear-gradient(90deg,#1f3a8a 0%,#1e40af 45%,#4338ca 75%,#6d28d9 100%);
+      box-shadow: 0 10px 28px rgba(67,56,202,.38), inset 0 0 0 1px rgba(255,255,255,.15);
+    }
+    .k-chat{
+      background: #f3e8ff; /* soft lavender */
+      box-shadow: 0 10px 25px rgba(0,0,0,.35), inset 0 0 0 1px rgba(20,20,40,.08);
+    }
+    .k-input{ box-shadow: inset 0 1px 0 rgba(0,0,0,.06); }
+    .k-send{
+      background:#fff;color:#0b1020;border-radius:.75rem;
+      box-shadow: 0 4px 10px rgba(0,0,0,.25), inset 0 0 0 1px rgba(0,0,0,.08);
+      padding:.5rem 1rem; font-weight:600;
+    }
+  </style>
+</head>
+<body class="text-white">
+  <!-- Top tagline -->
+  <header class="text-center py-4 px-6 max-w-7xl mx-auto">
+    <p class="text-base md:text-lg font-semibold">
+      Because we believe you are your greatest asset, we developed the
+      solutions for you to do more with less and buy back your time.
+    </p>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 pb-12">
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+      <!-- LEFT COLUMN: 4 CARDS (hard-coded) -->
+      <section class="grid sm:grid-cols-2 xl:grid-cols-1 gap-6">
+        <!-- Card 1 -->
+        <article class="relative rounded-xl overflow-hidden k-card">
+          <img src="https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1200&q=80"
+               class="w-full h-[220px] object-cover" alt="">
+          <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+          <div class="absolute left-4 bottom-4"><button class="k-btn">LEARN MORE</button></div>
+        </article>
+        <!-- Card 2 -->
+        <article class="relative rounded-xl overflow-hidden k-card">
+          <img src="https://images.unsplash.com/photo-1522252234503-e356532cafd5?auto=format&fit=crop&w=1200&q=80"
+               class="w-full h-[220px] object-cover" alt="">
+          <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+          <div class="absolute left-4 bottom-4"><button class="k-btn">LEARN MORE</button></div>
+        </article>
+        <!-- Card 3 -->
+        <article class="relative rounded-xl overflow-hidden k-card">
+          <img src="https://images.unsplash.com/photo-1529101091764-c3526daf38fe?auto=format&fit=crop&w=1200&q=80"
+               class="w-full h-[220px] object-cover" alt="">
+          <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+          <div class="absolute left-4 bottom-4"><button class="k-btn">LEARN MORE</button></div>
+        </article>
+        <!-- Card 4 -->
+        <article class="relative rounded-xl overflow-hidden k-card">
+          <img src="https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80"
+               class="w-full h-[220px] object-cover" alt="">
+          <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+          <div class="absolute left-4 bottom-4"><button class="k-btn">LEARN MORE</button></div>
+        </article>
+      </section>
+
+      <!-- CENTER: CHAT -->
+      <section class="relative">
+        <!-- Header pill -->
+        <div class="k-pill text-white text-lg md:text-2xl font-extrabold tracking-wide rounded-2xl px-6 py-3 text-center">
+          How can I assist you?
+        </div>
+
+        <!-- Chat panel -->
+        <div class="k-chat rounded-3xl mt-3 p-4 md:p-6">
+          <!-- “content” box -->
+          <div class="bg-white rounded-2xl p-4 md:p-5 text-slate-900 text-[13px] leading-relaxed border border-black/10">
+            <ul class="list-disc pl-5 space-y-1">
+              <li>Core: full-stack packages that integrate with services and automations.</li>
+              <li>Omni-channel messaging (YouTube, LinkedIn, Facebook, Instagram).</li>
+              <li>6-month messaging cadence with creative assets.</li>
+              <li>Pricing ranges from Starter to Premium.</li>
+            </ul>
+          </div>
+
+          <!-- message textarea -->
+          <div class="mt-3">
+            <textarea id="chatBox" rows="4" placeholder="Type your message…"
+              class="w-full bg-white text-slate-900 rounded-2xl k-input border border-black/10 px-4 py-3 outline-none"></textarea>
+          </div>
+
+          <!-- controls row: [name] [type] [Send] -->
+          <form id="chatForm" class="mt-3 grid grid-cols-[120px,1fr,90px] gap-3 items-center">
+            {% csrf_token %}
+            <input id="fromName" value="Eliot"
+                   class="bg-white text-slate-900 rounded-xl border border-black/10 px-3 py-2 k-input" />
+            <select id="msgType"
+                    class="bg-white text-slate-900 rounded-xl border border-black/10 px-3 py-2 k-input">
+              <option>Type</option>
+              <option>Pricing</option>
+              <option>Features</option>
+              <option>Integrations</option>
+            </select>
+            <button type="submit" class="k-send">Send</button>
+          </form>
+        </div>
+
+        <!-- Yellow CTA under chat -->
+        <a href="#"
+           class="block text-center mt-4 rounded-2xl font-bold py-4 bg-[#d8f018] text-black hover:brightness-95">
+          Click here to book a call with one of our account managers
+        </a>
+      </section>
+
+      <!-- RIGHT COLUMN: 4 CARDS (hard-coded) -->
+      <section class="grid sm:grid-cols-2 xl:grid-cols-1 gap-6">
+        <!-- Card 5 -->
+        <article class="relative rounded-xl overflow-hidden k-card">
+          <img src="https://images.unsplash.com/photo-1556761175-4b46a572b786?auto=format&fit=crop&w=1200&q=80"
+               class="w-full h-[220px] object-cover" alt="">
+          <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+          <div class="absolute left-4 bottom-4"><button class="k-btn">LEARN MORE</button></div>
+        </article>
+        <!-- Card 6 -->
+        <article class="relative rounded-xl overflow-hidden k-card">
+          <img src="https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=1200&q=80"
+               class="w-full h-[220px] object-cover" alt="">
+          <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+          <div class="absolute left-4 bottom-4"><button class="k-btn">LEARN MORE</button></div>
+        </article>
+        <!-- Card 7 -->
+        <article class="relative rounded-xl overflow-hidden k-card">
+          <img src="https://images.unsplash.com/photo-1542744173-05336fcc7ad4?auto=format&fit=crop&w=1200&q=80"
+               class="w-full h-[220px] object-cover" alt="">
+          <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+          <div class="absolute left-4 bottom-4"><button class="k-btn">LEARN MORE</button></div>
+        </article>
+        <!-- Card 8 -->
+        <article class="relative rounded-xl overflow-hidden k-card">
+          <img src="https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1200&q=80"
+               class="w-full h-[220px] object-cover" alt="">
+          <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+          <div class="absolute left-4 bottom-4"><button class="k-btn">LEARN MORE</button></div>
+        </article>
+      </section>
+
+      
+    </div>
+  </main>
+
+  <script>
+    const form = document.getElementById("chatForm");
+    const box  = document.getElementById("chatBox");
+
+    form.addEventListener("submit", async (e)=>{
+      e.preventDefault();
+      const text = box.value.trim();
+      if(!text) return;
+      const fd = new FormData(); fd.append("message", text);
+      try{
+        const res = await fetch("{% url 'chatbot_api' %}", {
+          method:"POST",
+          body: fd,
+          headers:{'X-CSRFToken': getCookie('csrftoken')}
+        });
+        const data = await res.json();
+        // Keeps the single-message vibe shown in the reference
+        box.value = data.reply;
+      }catch{
+        box.value = "Network error. Please try again.";
+      }
+    });
+
+    function getCookie(name){
+      const v = `; ${document.cookie}`.split(`; ${name}=`); 
+      if (v.length === 2) return v.pop().split(';').shift();
+    }
+  </script>
+</body>
+</html>
