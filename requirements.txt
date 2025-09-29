@@ -121,3 +121,5 @@ pip-tools==7.4.1
 pyproject-hooks==1.2.0
 
 stripe==12.5.1
+
+channels-redis==4.3.0

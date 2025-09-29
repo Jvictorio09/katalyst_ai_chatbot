@@ -1,0 +1,11 @@
+<div class="relative w-full h-[70vh] md:h-[78vh]">
+  <canvas id="vrmCanvas" class="w-full h-full block"></canvas>
+
+  <!-- simple UI (optional) -->
+  <div class="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-3">
+    <button id="btnReset" class="px-4 py-2 rounded-xl bg-emerald-600 text-white">Reset</button>
+    <button id="btnMic"   class="px-4 py-2 rounded-xl bg-slate-800 text-white">🎙️ Mic</button>
+  </div>
+</div>
+
+<script type="module" src="{% static 'js/main.ts' %}"></script>

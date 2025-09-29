@@ -1,0 +1,266 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Avatar (3D • Three.js)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html,body{height:100%;background:#0b1020;margin:0}
+    #stage{display:grid;grid-template-rows:1fr auto;height:100%}
+    .card{background:#0f172a;border:1px solid #1f2a44}
+    .chip{font-size:.85rem;padding:.25rem .6rem;border-radius:9999px;border:1px solid #1f2a44;background:#0b1020}
+    canvas{display:block;border-radius:1rem}
+    button{transition:transform .05s ease}
+    button:active{transform:scale(.98)}
+  </style>
+</head>
+<body class="text-slate-100">
+<div id="stage" class="max-w-5xl mx-auto">
+  <div class="p-4">
+    <div class="relative card rounded-2xl">
+      <div id="threewrap" class="w-full h-[460px] md:h-[560px]"></div>
+      <div id="stateChip" class="chip absolute top-3 right-3">Idle</div>
+    </div>
+  </div>
+
+  <div class="p-4 card rounded-2xl flex gap-2 items-center">
+    <input id="prompt" class="flex-1 bg-slate-900 rounded-xl px-4 py-3 border border-slate-700" placeholder="Type a message…"/>
+    <button id="send" class="px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500">Send</button>
+    <button id="mic" class="px-4 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500">🎙️ Hold to talk</button>
+  </div>
+</div>
+
+<script>
+/* ---------------- UI helpers ---------------- */
+const chip = document.getElementById('stateChip');
+const setChip = (t)=> chip.textContent = t;
+
+/* ---------------- Three.js scene ---------------- */
+const wrap = document.getElementById('threewrap');
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+wrap.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b1020);
+
+const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
+camera.position.set(0, 1.35, 2.0);
+
+const light = new THREE.DirectionalLight(0xffffff, 2.2);
+light.position.set(1.2, 2.0, 1.2);
+scene.add(new THREE.AmbientLight(0xffffff, 0.45), light);
+
+function resize(){
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w/h; camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize); resize();
+
+/* ---------------- Load avatar (GLB with blendshapes) ---------------- */
+const AVATAR_URL = "/static/avatars/rpm_head.glb"; // <-- change if needed
+const loader = new THREE.GLTFLoader();
+
+let avatar, head, blend = {}; // blend[name] -> {mesh, index}
+let blinkTimer = 0, speaking=false, listening=false;
+let clock = new THREE.Clock();
+
+loader.load(AVATAR_URL, (gltf) => {
+  avatar = gltf.scene;
+  avatar.position.set(0, 0.9, 0);
+  scene.add(avatar);
+
+  // Find a likely "head" node for idle motions
+  avatar.traverse(o=>{
+    if (!head && o.isObject3D && /head|neck/i.test(o.name)) head = o;
+    if (o.isMesh && o.morphTargetDictionary) {
+      const dict = o.morphTargetDictionary;
+      Object.keys(dict).forEach(name=>{
+        // Keep reference by lowercase for fuzzy lookup
+        blend[name.toLowerCase()] = { mesh:o, index:dict[name] };
+      });
+    }
+  });
+
+  console.log("Blendshapes found:", Object.keys(blend)); // inspect in console
+  animate();
+}, (xhr)=>{}, (err)=>{ console.error("GLTF load error", err); });
+
+/* Easy setter with fuzzy name matching */
+function setBlend(name, value){
+  const key = name.toLowerCase();
+  // try exact
+  if (blend[key]) {
+    blend[key].mesh.morphTargetInfluences[blend[key].index] = value;
+    return true;
+  }
+  // try common aliases
+  const aliases = {
+    'eyeblinkleft': ['blink_left','eyeBlinkLeft','eyesclosed','eyesclosedleft'],
+    'eyeblinkright':['blink_right','eyeBlinkRight','eyesclosedright'],
+    'jawopen': ['jaw_open','openjaw','mouthopen','mouth_open'],
+    'mouthfunnel': ['mouth_funnel','o','oo','mouthround'],
+    'mouthpucker': ['mouth_pucker','pucker'],
+    'mouthsmileleft': ['mouthSmileLeft','smile_left','smileL'],
+    'mouthsmileright':['mouthSmileRight','smile_right','smileR'],
+  };
+  const list = aliases[key]||[];
+  for (const alt of [key, ...list].map(s=>s.toLowerCase())) {
+    if (blend[alt]) {
+      blend[alt].mesh.morphTargetInfluences[blend[alt].index] = value;
+      return true;
+    }
+  }
+  return false;
+}
+
+/* Idle micro-motions + blink */
+function tickIdle(dt){
+  if (head) {
+    head.rotation.y = Math.sin(performance.now()*0.0003)*0.05;
+    head.rotation.x = Math.sin(performance.now()*0.00022)*0.03;
+  }
+  blinkTimer += dt;
+  if (blinkTimer > 3 + Math.random()*2) {
+    // quick blink
+    const v = 1.0;
+    setBlend('eyeBlinkLeft', v);
+    setBlend('eyeBlinkRight', v);
+    setTimeout(()=>{ setBlend('eyeBlinkLeft', 0); setBlend('eyeBlinkRight', 0); }, 120);
+    blinkTimer = 0;
+  }
+}
+
+/* Jaw param [0..1] that we drive from mic or TTS amplitude */
+let jaw = 0;
+function setJaw(x){
+  jaw = Math.max(0, Math.min(1, x));
+  // prefer jawOpen blendshape; else fallback: slight head bob
+  if (!setBlend('jawOpen', jaw*0.9)) {
+    if (head) head.position.y = 0.9 + jaw*0.03;
+  }
+}
+
+/* Render loop */
+function animate(){
+  const dt = clock.getDelta();
+  if (!speaking && !listening) {
+    // relax jaw when idle
+    setJaw(Math.max(0, jaw - dt*1.2));
+  }
+  tickIdle(dt);
+  renderer.render(scene, camera);
+  requestAnimationFrame(animate);
+}
+
+/* ---------------- Audio plumbing (same APIs) ---------------- */
+const promptEl = document.getElementById('prompt');
+document.getElementById('send').onclick = async ()=>{
+  const txt = (promptEl.value||'').trim();
+  if (!txt) return;
+  await playReply(txt);
+};
+
+let audioCtx, micStream, mediaRec, micAnalyser, micData, silenceTimer=null;
+async function startMic(){
+  micStream = await navigator.mediaDevices.getUserMedia({audio:true});
+  mediaRec = new MediaRecorder(micStream, { mimeType:"audio/webm;codecs=opus", audioBitsPerSecond: 32000 });
+  const chunks = [];
+  mediaRec.ondataavailable = e => chunks.push(e.data);
+  mediaRec.start();
+
+  // live mouth from mic
+  if (!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+  const src = audioCtx.createMediaStreamSource(micStream);
+  micAnalyser = audioCtx.createAnalyser(); micAnalyser.fftSize = 512;
+  micData = new Uint8Array(micAnalyser.frequencyBinCount);
+  src.connect(micAnalyser);
+
+  listening = true; setChip("Listening…");
+  const AMP_GATE = 0.04, SILENCE_MS = 600, HARD_CAP = 3000;
+  const startTS = performance.now();
+  function micTick(){
+    micAnalyser.getByteTimeDomainData(micData);
+    let sum=0; for (let i=0;i<micData.length;i++){ const d=(micData[i]-128)/128; sum += d*d; }
+    const amp = Math.sqrt(sum/micData.length);
+    setJaw(Math.min(1, amp*3.2));
+    if (amp<AMP_GATE) {
+      if (!silenceTimer) silenceTimer = setTimeout(stopMic, SILENCE_MS);
+    } else if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer=null; }
+    if (performance.now()-startTS > HARD_CAP) stopMic();
+    if (mediaRec && mediaRec.state === "recording") requestAnimationFrame(micTick);
+  }
+  requestAnimationFrame(micTick);
+
+  mediaRec.onstop = async ()=>{
+    listening = false; setChip("Thinking…");
+    micStream.getTracks().forEach(t=>t.stop());
+    const blob = new Blob(chunks, {type:"audio/webm"});
+    const text = await stt(blob);
+    if (text && text.trim()) { await playReply(text); } else { setChip("Idle"); }
+  };
+}
+
+async function stopMic(){
+  if (!mediaRec || mediaRec.state !== "recording") return;
+  if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer=null; }
+  mediaRec.stop();
+}
+
+const micBtn = document.getElementById('mic');
+micBtn.onmousedown = micBtn.ontouchstart = ()=>{startMic(); micBtn.textContent="● Release to send";};
+micBtn.onmouseup   = micBtn.ontouchend   = ()=>{stopMic();  micBtn.textContent="🎙️ Hold to talk";};
+
+async function askLLM(text){
+  const r = await fetch("/api/chat",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
+  if (!r.ok) throw new Error(await r.text());
+  const j = await r.json(); return j.reply;
+}
+
+async function tts(text){
+  const r = await fetch("/api/tts",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
+  if (!r.ok) throw new Error(await r.text());
+  const j = await r.json(); return j.url;
+}
+
+async function stt(blob){
+  const fd = new FormData(); fd.append("audio", blob, "mic.webm");
+  const r = await fetch("/api/stt",{method:"POST",body:fd});
+  if (!r.ok) return "";
+  const j = await r.json(); return j.text;
+}
+
+async function playReply(text){
+  setChip("Thinking…");
+  const reply = await askLLM(text);
+  const url = await tts(reply);
+
+  const a = new Audio(url);
+  speaking = true; setChip("Speaking…");
+  a.onended = ()=>{ speaking=false; setChip("Idle"); };
+
+  // drive jaw from TTS audio
+  if (!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+  const src = audioCtx.createMediaElementSource(a);
+  const analyser = audioCtx.createAnalyser(); analyser.fftSize = 512;
+  const data = new Uint8Array(analyser.frequencyBinCount);
+  src.connect(analyser); analyser.connect(audioCtx.destination);
+
+  function ttsTick(){
+    analyser.getByteTimeDomainData(data);
+    let sum=0; for (let i=0;i<data.length;i++){ const d=(data[i]-128)/128; sum += d*d; }
+    const amp = Math.sqrt(sum/data.length);
+    setJaw(Math.min(1, amp*3.2));
+    if (!a.paused && !a.ended) requestAnimationFrame(ttsTick);
+  }
+  requestAnimationFrame(ttsTick);
+
+  await audioCtx.resume();
+  a.play();
+}
+</script>
+</body>
+</html>

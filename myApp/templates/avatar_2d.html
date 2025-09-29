@@ -1,0 +1,156 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Avatar (2D)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html,body{height:100%;background:#0b1020}
+    #stage{display:grid;grid-template-rows:1fr auto;height:100%}
+    .card{background:#0f172a;border:1px solid #1f2a44}
+    .chip{font-size:.85rem;padding:.25rem .6rem;border-radius:9999px;border:1px solid #1f2a44;background:#0b1020}
+  </style>
+</head>
+<body class="text-slate-100">
+<div id="stage" class="max-w-4xl mx-auto">
+  <div class="p-4">
+    <div class="relative w-full card rounded-2xl">
+      <canvas id="avatar" class="w-full rounded-2xl block" height="480"></canvas>
+      <div id="stateChip" class="chip absolute top-3 right-3">Idle</div>
+    </div>
+  </div>
+  <div class="p-4 card rounded-2xl flex gap-2 items-center">
+    <input id="prompt" class="flex-1 bg-slate-900 rounded-xl px-4 py-3 border border-slate-700" placeholder="Type a message…"/>
+    <button id="send" class="px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500">Send</button>
+    <button id="mic" class="px-4 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500">🎙️ Hold to talk</button>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('avatar');
+const ctx = canvas.getContext('2d');
+const stateChip = document.getElementById('stateChip');
+
+function setChip(txt){ stateChip.textContent=txt; }
+
+// Avatar state
+let t=0,jawOpen=0,blink=0,blinkT=0,speaking=false,listening=false;
+function fitCanvas(){canvas.width=canvas.clientWidth;canvas.height=Math.min(520,canvas.clientWidth*0.6);}
+window.addEventListener('resize',fitCanvas);fitCanvas();
+
+function draw(dt){
+  t+=dt; blinkT+=dt;
+  if(blinkT>3+Math.random()*2){blink=1;blinkT=0;}
+  blink=Math.max(0,blink-4*dt);
+
+  const W=canvas.width,H=canvas.height,cx=W/2,cy=H/2,r=Math.min(W,H)/4;
+  ctx.clearRect(0,0,W,H);
+
+  // head
+  ctx.fillStyle="#223357"; ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
+
+  // eyes
+  const eyeY=cy-r*0.25,eyeDX=r*0.32,eyeOpen=Math.max(0.18,0.3-blink*0.28);
+  function eye(x){
+    ctx.fillStyle="#e5eefc"; ctx.beginPath(); ctx.ellipse(cx+x,eyeY,r*0.22,r*eyeOpen,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle="#2dd4bf"; ctx.beginPath(); ctx.arc(cx+x,eyeY,r*0.08,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle="#0b1020"; ctx.beginPath(); ctx.arc(cx+x,eyeY,r*0.035,0,Math.PI*2); ctx.fill();
+  }
+  eye(-eyeDX); eye(eyeDX);
+
+  // mouth
+  const mW=r*0.6,mH=r*(0.16+jawOpen*0.6),mY=cy+r*0.35;
+  ctx.fillStyle="#fecaca"; ctx.strokeStyle="#f472b6"; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.ellipse(cx,mY,mW,mH,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+
+  requestAnimationFrame(step);
+}
+let last=performance.now();
+function step(now){const dt=(now-last)/1000;last=now;if(!speaking&&!listening)jawOpen=Math.max(0,jawOpen-dt*1.2);draw(dt);}requestAnimationFrame(step);
+
+// API helpers
+async function askLLM(text){
+  setChip("Thinking…");
+  const r=await fetch("/api/chat",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
+  const j=await r.json(); return j.reply;
+}
+async function tts(text){
+  const r=await fetch("/api/tts",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
+  const j=await r.json(); return j.url;
+}
+async function stt(blob){
+  const fd=new FormData(); fd.append("audio",blob,"mic.webm");
+  const r=await fetch("/api/stt",{method:"POST",body:fd});
+  const j=await r.json(); return j.text;
+}
+
+// Play reply
+async function playReply(text){
+  if(!text)return;
+  const reply=await askLLM(text);
+  const url=await tts(reply);
+  const a=new Audio(url);
+  speaking=true; setChip("Speaking…");
+  a.onended=()=>{speaking=false;setChip("Idle");};
+  a.play();
+  const ctxAudio=new (window.AudioContext||window.webkitAudioContext)();
+  const src=ctxAudio.createMediaElementSource(a);
+  const analyser=ctxAudio.createAnalyser(); analyser.fftSize=512;
+  const data=new Uint8Array(analyser.frequencyBinCount);
+  src.connect(analyser); analyser.connect(ctxAudio.destination);
+  function tick(){
+    analyser.getByteTimeDomainData(data);
+    let sum=0;for(let i=0;i<data.length;i++){const d=(data[i]-128)/128;sum+=d*d;}
+    jawOpen=Math.min(1,Math.sqrt(sum/data.length)*3.2);
+    if(!a.paused&&!a.ended)requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+// Input
+const promptEl=document.getElementById('prompt');
+document.getElementById('send').onclick=async()=>{const txt=promptEl.value.trim();if(txt)await playReply(txt);};
+
+// Mic recording with silence auto-stop
+let mediaRec,chunks=[],micStream,audioCtx;
+async function startMic(){
+  micStream=await navigator.mediaDevices.getUserMedia({audio:true});
+  mediaRec=new MediaRecorder(micStream,{mimeType:"audio/webm;codecs=opus",audioBitsPerSecond:32000});
+  chunks=[]; mediaRec.ondataavailable=e=>chunks.push(e.data); mediaRec.start();
+
+  if(!audioCtx)audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+  const src=audioCtx.createMediaStreamSource(micStream);
+  const analyser=audioCtx.createAnalyser(); analyser.fftSize=512;
+  const data=new Uint8Array(analyser.frequencyBinCount); src.connect(analyser);
+  const SILENCE_HOLD=600,HARD_CAP=3000,AMP_GATE=0.04; const startT=performance.now(); let silenceT=null;
+  listening=true; setChip("Listening…");
+  function vadTick(){
+    analyser.getByteTimeDomainData(data);
+    let sum=0;for(let i=0;i<data.length;i++){const d=(data[i]-128)/128;sum+=d*d;}
+    const amp=Math.sqrt(sum/data.length);
+    jawOpen=Math.min(1,amp*3.2);
+    if(amp<AMP_GATE){if(!silenceT)silenceT=setTimeout(stopMic,SILENCE_HOLD);}
+    else{if(silenceT){clearTimeout(silenceT);silenceT=null;}}
+    if(performance.now()-startT>HARD_CAP)stopMic();
+    if(mediaRec&&mediaRec.state==="recording")requestAnimationFrame(vadTick);
+  }
+  requestAnimationFrame(vadTick);
+}
+async function stopMic(){
+  if(!mediaRec||mediaRec.state!=="recording")return;
+  mediaRec.onstop=async()=>{
+    listening=false; setChip("Thinking…");
+    const blob=new Blob(chunks,{type:"audio/webm"});
+    micStream.getTracks().forEach(t=>t.stop());
+    const text=await stt(blob);
+    if(text&&text.trim())await playReply(text); else setChip("Idle");
+  };
+  mediaRec.stop();
+}
+const micBtn=document.getElementById('mic');
+micBtn.onmousedown=micBtn.ontouchstart=()=>{startMic();micBtn.textContent="● Release to send";};
+micBtn.onmouseup=micBtn.ontouchend=()=>{stopMic();micBtn.textContent="🎙️ Hold to talk";};
+</script>
+</body>
+</html>

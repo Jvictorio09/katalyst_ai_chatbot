@@ -123,7 +123,9 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
-STATIC_URL = 'static/'
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+STATIC_URL = "/static/"
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
@@ -137,3 +139,18 @@ import os
 CHATBOT_WEBHOOK_URL  = "https://katalyst-crm.fly.dev/webhook/1390f5ad-851a-4b6f-ba50-2f084cfc436d"
 CHATBOT_WEBHOOK_AUTH = ""                 # e.g. "Bearer xxx" if they add auth later
 CHATBOT_TIMEOUT_SECONDS = 12
+
+
+
+AI_TTS_PROVIDER = os.getenv("AI_TTS_PROVIDER", "eleven")  # eleven | openai
+AI_STT_PROVIDER = os.getenv("AI_STT_PROVIDER", "deepgram")
+
+
+
+import os
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer",
+    }
+}

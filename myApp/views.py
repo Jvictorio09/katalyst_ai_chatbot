@@ -1,6 +1,12 @@
+from __future__ import annotations   # ✅ must be first
+
+import os, io, uuid, base64, json, httpx
+from django.http import JsonResponse, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import render
-from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
+from django.conf import settings
+
 
 def katalyst_page(request):
     # hard-coded template; no context needed
@@ -76,3 +82,118 @@ def chat_suggestions_api(request):
         {"label": "Book a demo",   "text": "I’d like to book a demo."},
     ]
     return JsonResponse({"suggestions": suggestions})
+
+
+
+
+
+OPENAI_KEY   = os.getenv("OPENAI_API_KEY")
+DG_KEY       = os.getenv("DEEPGRAM_API_KEY")
+EL_KEY       = os.getenv("ELEVENLABS_API_KEY")
+EL_VOICE     = os.getenv("ELEVENLABS_VOICE_ID", "Bella")
+
+def avatar_2d(request):
+    return render(request, "avatar_2d.html")
+
+def avatar_3d(request):
+    return render(request, "avatar_3d.html")
+
+
+# ----------------------------- STT -----------------------------
+@csrf_exempt
+@require_POST
+def api_stt(request):
+    audio = request.FILES.get("audio")
+    if not audio:
+        return HttpResponseBadRequest("no audio")
+    buf = audio.read()
+
+    provider = getattr(settings, "AI_STT_PROVIDER", "deepgram")
+    text = ""
+    if provider == "deepgram":
+        # Deepgram prerecorded
+        url = "https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true"
+        headers = {"Authorization": f"Token {DG_KEY}", "Content-Type": "audio/webm"}
+        with httpx.Client(timeout=60) as client:
+            r = client.post(url, headers=headers, content=buf)
+        r.raise_for_status()
+        text = r.json()["results"]["channels"][0]["alternatives"][0]["transcript"]
+    else:
+        # OpenAI Whisper
+        url = "https://api.openai.com/v1/audio/transcriptions"
+        files = {"file": ("mic.webm", buf, "audio/webm")}
+        data = {"model": "gpt-4o-transcribe"}  # or "whisper-1" if available in your org
+        headers = {"Authorization": f"Bearer {OPENAI_KEY}"}
+        with httpx.Client(timeout=120) as client:
+            r = client.post(url, headers=headers, data=data, files=files)
+        r.raise_for_status()
+        text = r.json()["text"]
+
+    return JsonResponse({"text": text})
+
+# ----------------------------- CHAT -----------------------------
+import os, uuid, json, httpx
+from django.http import JsonResponse, HttpResponseBadRequest
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+from django.conf import settings
+
+OPENAI_KEY   = os.getenv("OPENAI_API_KEY")
+DG_KEY       = os.getenv("DEEPGRAM_API_KEY")
+EL_KEY       = os.getenv("ELEVENLABS_API_KEY")
+EL_VOICE     = os.getenv("ELEVENLABS_VOICE_ID", "Bella")
+
+# Reuse clients for speed
+HTTP_TIMEOUT = 30.0
+DG = httpx.Client(timeout=HTTP_TIMEOUT, headers={"Authorization": f"Token {DG_KEY}"}) if DG_KEY else None
+OX = httpx.Client(timeout=HTTP_TIMEOUT, headers={"Authorization": f"Bearer {OPENAI_KEY}"}) if OPENAI_KEY else None
+EL = httpx.Client(timeout=HTTP_TIMEOUT, headers={"xi-api-key": EL_KEY}) if EL_KEY else None
+
+# ---------- CHAT ----------
+@csrf_exempt
+@require_POST
+def api_chat(request):
+    body = json.loads(request.body.decode())
+    user_text = (body.get("text") or "").strip()
+    if not user_text:
+        return JsonResponse({"reply": "Sorry, I didn’t catch that. Can you repeat?"})
+    data = {
+        "model": "gpt-4o-mini",
+        "messages": [
+            {"role":"system","content":"Be brief (1–2 sentences). Warm, clear, Taglish OK."},
+            {"role":"user","content":user_text}
+        ],
+        "temperature": 0.4,
+        "max_tokens": 120
+    }
+    r = OX.post("https://api.openai.com/v1/chat/completions", json=data)
+    r.raise_for_status()
+    reply = r.json()["choices"][0]["message"]["content"]
+    return JsonResponse({"reply": reply})
+
+# ---------- TTS ----------
+@csrf_exempt
+@require_POST
+def api_tts(request):
+    body = json.loads(request.body.decode())
+    text = (body.get("text") or "").strip()
+    if not text:
+        return HttpResponseBadRequest("no text")
+
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{EL_VOICE}"
+    payload = {
+        "text": text,
+        "model_id": "eleven_multilingual_v2",
+        "voice_settings": {"stability": 0.45, "similarity_boost": 0.7},
+        "optimize_streaming_latency": 3,
+        "output_format": "mp3_22050_32"
+    }
+    r = EL.post(url, json=payload)
+    r.raise_for_status()
+    mp3 = r.content
+
+    outdir = settings.MEDIA_ROOT / "tts"; outdir.mkdir(parents=True, exist_ok=True)
+    fname = f"{uuid.uuid4().hex}.mp3"
+    fpath = outdir / fname
+    with open(fpath,"wb") as f: f.write(mp3)
+    return JsonResponse({"url": f"{settings.MEDIA_URL}tts/{fname}"})
